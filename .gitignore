@@ -46,3 +46,5 @@ todo/
 # temp stuff
 *.tmp
 *.log
+
+config.py
