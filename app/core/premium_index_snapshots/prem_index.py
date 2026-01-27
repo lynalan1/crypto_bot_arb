@@ -2,6 +2,7 @@
 import time
 import requests
 from sqlalchemy import create_engine, text
+from datetime import datetime, timezone
 
 
 def get_premium_index(symbol="ETHUSDT"):
@@ -9,13 +10,14 @@ def get_premium_index(symbol="ETHUSDT"):
     url = "https://fapi.binance.com/fapi/v1/premiumIndex"
     params = {"symbol": symbol}
     r = requests.get(url, params=params, timeout=10)
+    recv_ts = datetime.now(timezone.utc)
     r.raise_for_status()
     d = r.json()
     clean_data = []
     nft_ms = int(d.get("nextFundingTime", 0))
 
     if nft_ms:
-        nft_utc = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(nft_ms / 1000))
+        nft_utc = datetime.now(timezone.utc)
 
     clean_data.append({'symbol' : d["symbol"],
                        'mark_price' : d["markPrice"],
@@ -23,8 +25,8 @@ def get_premium_index(symbol="ETHUSDT"):
                        'last_funding_rate' : d["lastFundingRate"],
                        'interest_rate' :  d.get("interestRate"),
                        'next_funding_time': nft_utc,
-                       'collected_at' : time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(d.get('time') / 1000)),
-                       'ts' : time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(d.get('time') / 1000))
+                       'collected_at' : datetime.now(timezone.utc),
+                       'ts' : recv_ts
                        })
 
     return clean_data
