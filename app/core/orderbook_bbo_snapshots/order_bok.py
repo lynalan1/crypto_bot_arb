@@ -86,7 +86,7 @@ async def processor(queue: asyncio.Queue):
 
             with engine.begin() as conn:
                 
-                print('запись')
+                
                 conn.execute(
                     text("""
                         INSERT INTO orderbook_bbo_snapshots (
@@ -121,6 +121,6 @@ async def main():
 
 if __name__ == "__main__":
 
-    print('Пуск')
+    
     asyncio.run(main())
 
