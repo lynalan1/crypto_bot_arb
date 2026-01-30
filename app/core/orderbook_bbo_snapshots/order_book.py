@@ -1,7 +1,7 @@
 import asyncio, json, websockets
 from typing import Dict, Any, Tuple
 from sqlalchemy import create_engine, text
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from collections import deque
 from config import DB_URL, SYMBOLS
 

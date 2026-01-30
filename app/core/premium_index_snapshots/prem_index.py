@@ -1,39 +1,39 @@
 
-import time
 import requests
 from sqlalchemy import create_engine, text
 from datetime import datetime, timezone
+from config import prem_ind, SYMBOLS, DB_URL
 
-
-def get_premium_index(symbol="ETHUSDT"):
+def get_premium_index(symbol="ETHUSDT", url_prem=''):
     
-    url = "https://fapi.binance.com/fapi/v1/premiumIndex"
+    url = url_prem
     params = {"symbol": symbol}
     r = requests.get(url, params=params, timeout=10)
     recv_ts = datetime.now(timezone.utc)
+
     r.raise_for_status()
     d = r.json()
     clean_data = []
-    nft_ms = int(d.get("nextFundingTime", 0))
 
-    if nft_ms:
-        nft_utc = datetime.now(timezone.utc)
+    nft_ms = int(d.get("nextFundingTime", 0))
+    nft_utc = datetime.fromtimestamp(nft_ms / 1000, tz=timezone.utc) if nft_ms else None
+
+    ir = d.get("interestRate")
+    interest_rate = float(ir) if ir is not None else None
 
     clean_data.append({'symbol' : d["symbol"],
-                       'mark_price' : d["markPrice"],
-                       'index_price' : d["indexPrice"],
-                       'last_funding_rate' : d["lastFundingRate"],
-                       'interest_rate' :  d.get("interestRate"),
+                       'mark_price' : float(d["markPrice"]),
+                       'index_price' : float(d["indexPrice"]),
+                       'last_funding_rate' : float(d["lastFundingRate"]),
+                       'interest_rate' :  interest_rate,
                        'next_funding_time': nft_utc,
-                       'collected_at' : datetime.now(timezone.utc),
+                       'collected_at' : recv_ts,
                        'ts' : recv_ts
                        })
 
     return clean_data
 
 def update_data(data, engine):
-
-    params = data[0]
 
     with engine.begin() as conn:
 
@@ -45,13 +45,15 @@ def update_data(data, engine):
                         :symbol, :ts, :mark_price, :index_price, :last_funding_rate, :next_funding_time, :interest_rate, :collected_at
                     )
                     ON CONFLICT (symbol, ts) DO NOTHING
-                """), params)
+                """), data)
         
     
 if __name__ == "__main__":
 
-    
-    engine = create_engine("postgresql+psycopg://crypto_user:crypto_pass@localhost:5438/crypto_bot_db")
-    data = get_premium_index() 
-    print('загрузка')
-    update_data(data, engine)
+    engine = create_engine(DB_URL)
+
+    for s in SYMBOLS:
+
+        data = get_premium_index(symbol=s.upper(), url_prem=prem_ind)
+        update_data(data[0], engine)
+
