@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 
 def get_funding_history(symbol="ETHUSDT", limit=270):
 
-    FUNDING_INTERVAL_HOURS = 8
     params = {"symbol": symbol, "limit": limit}
     r_fund_rate = requests.get(url_fund_rate, params=params, timeout=10)
     r_fund_rate.raise_for_status()
