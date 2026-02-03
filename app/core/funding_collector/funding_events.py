@@ -1,4 +1,3 @@
-import time
 import requests
 from sqlalchemy import create_engine, text
 from config import DB_URL, SYMBOLS, url_fund_rate
@@ -58,6 +57,6 @@ if __name__ == "__main__":
     FUNDING_INTERVAL_HOURS = 8
     for s in SYMBOLS:
 
-        data = get_funding_history(symbol=s.upper(), )
+        data = get_funding_history(symbol=s.upper(),)
         update_data(data, engine, FUNDING_INTERVAL_HOURS)
     
