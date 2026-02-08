@@ -267,6 +267,5 @@ if __name__ == "__main__":
                 pid = open_position(engine, data_res)
 
     while True:
-        print('зп')
         refresh_open_positions(engine)
         time.sleep(1)
