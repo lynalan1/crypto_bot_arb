@@ -4,7 +4,7 @@ from collections import deque
 from typing import Dict
 from datetime import datetime, timezone
 import numpy as np
-from config import DB_URL, SYMBOLS
+from config import DB_URL, SYMBOLS, url_fund_rate
 
 def bucket_1d(dt):
 
@@ -51,7 +51,7 @@ def write_daily_stats(conn, param):
                         
 def get_funding_stats(symbol="ETHUSDT", db_url="", limit=270):
 
-    url = "https://fapi.binance.com/fapi/v1/fundingRate"
+    url = url_fund_rate
     params = {"symbol": symbol, 'limit' : limit}
     r = requests.get(url, params=params, timeout=10)
     r.raise_for_status()

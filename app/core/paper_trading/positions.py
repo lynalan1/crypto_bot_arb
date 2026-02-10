@@ -56,6 +56,137 @@ def load_order_bbo(symbol, engine):
     with engine.connect() as conn:
         return conn.execute(sql, {"symbol": symbol}).mappings().first()
 
+def load_paper_cashflow(symbol, engine):
+    
+    sql = text("""
+    SELECT position_id, symbol, funding_time, funding_rate,
+           mark_price, notional_usdt, cashflow_usdt
+    WHERE symbol = :symbol
+    ORDER BY ts DESC
+    LIMIT 1
+    """)
+    with engine.connect() as conn:
+        return conn.execute(sql, {"symbol": symbol}).mappings().first()
+
+def apply_funding_cashflows(engine, dry_run: bool = True, limit_positions: int = 50):
+    now_utc = datetime.now(timezone.utc)
+
+    
+    sql_positions = text("""
+        SELECT
+            id, symbol, qty_base, fut_side, last_funding_ts
+        FROM paper_positions
+        WHERE status = 'OPEN'
+        ORDER BY opened_at ASC
+        LIMIT :limit
+        FOR UPDATE
+    """)
+
+    
+    sql_next_funding = text("""
+        SELECT funding_time, funding_rate
+        FROM funding_events
+        WHERE symbol = :symbol AND (funding_time > :last_ts)
+        ORDER BY funding_time
+        LIMIT 1
+    """)
+
+    
+    sql_mark = text("""
+        SELECT mark_price
+        FROM premium_index_snapshots
+        WHERE symbol = :symbol
+        ORDER BY ts DESC
+        LIMIT 1
+    """)
+
+    
+    sql_ins_cashflow = text("""
+        INSERT INTO paper_funding_cashflows (
+            position_id, symbol, funding_time, funding_rate,
+            mark_price, notional_usdt, cashflow_usdt
+        )
+        VALUES (
+            :position_id, :symbol, :funding_time, :funding_rate,
+            :mark_price, :notional_usdt, :cashflow_usdt
+        )
+        ON CONFLICT (position_id, funding_time) DO NOTHING
+        RETURNING id
+    """)
+
+    
+    sql_upd_pos = text("""
+        UPDATE paper_positions
+        SET funding_pnl_usdt = funding_pnl_usdt + :cashflow_usdt,
+            last_funding_ts  = :funding_time,
+            updated_at       = now()
+        WHERE id = :position_id
+    """)
+
+    results = []  
+
+    with engine.begin() as conn:
+        positions = conn.execute(sql_positions, {"limit": limit_positions}).mappings().all()
+
+        for pos in positions:
+            pid = pos["id"]
+            symbol = pos["symbol"]
+            last_ts = pos["last_funding_ts"]
+            next_f = conn.execute(sql_next_funding, {
+                "symbol": symbol,
+                "last_ts": last_ts
+            }).mappings().first()
+            print(next_f)
+            if not next_f:
+                continue
+
+            funding_time = next_f["funding_time"]
+            funding_rate = Decimal(next_f["funding_rate"])
+
+            # funding ещё не наступил — пропускаем
+            if funding_time > now_utc:
+                continue
+
+            mark = conn.execute(sql_mark, {"symbol": symbol}).mappings().first()
+            if not mark:
+                continue
+
+            mark_price = Decimal(mark["mark_price"])
+            qty_base = Decimal(pos["qty_base"])
+            fut_side = pos["fut_side"] or "SHORT"
+
+            # знак: LONG фьючей платит при +funding, SHORT получает при +funding (обычно)
+            side = Decimal(1) if fut_side == "LONG" else Decimal(-1)
+
+            notional_usdt = qty_base * mark_price
+            cashflow_usdt = (-side) * notional_usdt * funding_rate
+
+            param = {
+                "position_id": pid,
+                "symbol": symbol,
+                "funding_time": funding_time,
+                "funding_rate": funding_rate,
+                "mark_price": mark_price,
+                "notional_usdt": notional_usdt,
+                "cashflow_usdt": cashflow_usdt,
+            }
+
+            if dry_run:
+                results.append(param)
+                continue
+
+            # apply: сначала пытаемся вставить cashflow
+            inserted = conn.execute(sql_ins_cashflow, param).scalar()
+
+            # если вставка не прошла (уже есть), позицию не трогаем
+            if inserted is None:
+                continue
+
+            # теперь обновляем агрегат в positions
+            conn.execute(sql_upd_pos, param)
+
+    return results
+
 def build_open_position(symbol, engine, market):
 
     data_symbols = load_data_symbols(engine, symbol, market)
@@ -144,7 +275,7 @@ def open_position(engine, data: dict) -> int:
 
     with engine.begin() as conn:
         result = conn.execute(sql, data)
-        position_id = result.scalar_one()   # ← ВАЖНО
+        position_id = result.scalar_one()  
 
     return position_id
 
@@ -176,35 +307,6 @@ def refresh_open_positions(engine):
 
             
             inc = 0.0
-            ft_apply = None
-
-            prem = load_data_prem_ind(symbol, engine)
-            funding_evens = load_data_funding_events(symbol, engine)
-
-            if prem and prem["next_funding_time"]:
-
-                next_ft = prem["next_funding_time"]
-                ft_apply = next_ft - timedelta(hours=int(interval_hours_funding))
-
-                last_paid = pos["last_funding_ts"]
-                if now_utc >= next_ft and (last_paid is None or last_paid < ft_apply):
-
-                    side = 1 if pos["fut_side"] == "LONG" else -1
-                    notional = Decimal(pos["qty_base"]) * Decimal(prem["mark_price"])
-                    rate = Decimal(funding_evens["funding_rate"])
-                    inc = -side * notional * rate
-
-                    conn.execute(text("""
-                        UPDATE paper_positions
-                        SET funding_pnl_usdt = funding_pnl_usdt + :inc,
-                            last_funding_ts = :ft,
-                            updated_at = now()
-                        WHERE id = :pid
-                    """), {
-                        "pid": pid,
-                        "inc": inc,
-                        "ft": ft_apply
-                    })
 
             funding_new = Decimal(pos["funding_pnl_usdt"] or 0) + Decimal(inc)
 
@@ -262,10 +364,17 @@ if __name__ == "__main__":
 
             s = s.upper()
             data_res = build_open_position(s, engine, m)
-
             if data_res:
                 pid = open_position(engine, data_res)
 
     while True:
+
         refresh_open_positions(engine)
+
+        
+        if int(time.time()) % 60 == 0:
+            apply_funding_cashflows(engine, dry_run=False)
+
         time.sleep(1)
+
+        print(apply_funding_cashflows(engine, dry_run=True))
