@@ -143,7 +143,7 @@ def apply_funding_cashflows(engine, dry_run: bool = True, limit_positions: int =
             funding_time = next_f["funding_time"]
             funding_rate = Decimal(next_f["funding_rate"])
 
-            # funding ещё не наступил — пропускаем
+            
             if funding_time > now_utc:
                 continue
 
@@ -155,7 +155,7 @@ def apply_funding_cashflows(engine, dry_run: bool = True, limit_positions: int =
             qty_base = Decimal(pos["qty_base"])
             fut_side = pos["fut_side"] or "SHORT"
 
-            # знак: LONG фьючей платит при +funding, SHORT получает при +funding (обычно)
+           
             side = Decimal(1) if fut_side == "LONG" else Decimal(-1)
 
             notional_usdt = qty_base * mark_price
@@ -175,14 +175,14 @@ def apply_funding_cashflows(engine, dry_run: bool = True, limit_positions: int =
                 results.append(param)
                 continue
 
-            # apply: сначала пытаемся вставить cashflow
+            
             inserted = conn.execute(sql_ins_cashflow, param).scalar()
 
-            # если вставка не прошла (уже есть), позицию не трогаем
+           
             if inserted is None:
                 continue
 
-            # теперь обновляем агрегат в positions
+            
             conn.execute(sql_upd_pos, param)
 
     return results
@@ -282,6 +282,7 @@ def open_position(engine, data: dict) -> int:
 def refresh_open_positions(engine):
     now_utc = datetime.now(timezone.utc)
 
+    
     with engine.begin() as conn:
         positions = conn.execute(text("""
             SELECT
