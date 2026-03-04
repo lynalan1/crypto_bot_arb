@@ -3,6 +3,7 @@ import requests
 from sqlalchemy import text
 from datetime import datetime, timezone
 from config import prem_ind
+import logging
 
 def update_premium_index(engine, SYMBOLS):
 
@@ -30,7 +31,7 @@ def update_premium_index(engine, SYMBOLS):
                         'interest_rate' :  interest_rate,
                         'next_funding_time': nft_utc,
                         'collected_at' : recv_ts,
-                        'ts' : recv_ts
+                        'ts' : nft_utc
                         })
 
         return clean_data
@@ -48,11 +49,18 @@ def update_premium_index(engine, SYMBOLS):
                         )
                         ON CONFLICT (symbol, ts) DO NOTHING
                     """), data)
-    
-    for s in SYMBOLS:
+            
+        for s in SYMBOLS:
+                
+                try:
 
-            data = get_premium_index(symbol=s.upper(), url_prem=prem_ind)
-            update_data(data[0], engine)
-        
+                    data = get_premium_index(symbol=s.upper(), url_prem=prem_ind)
+                    update_data(data[0], engine)
+
+                except Exception as e:
+
+                    logging.error(f"Failed for {s}: {e}")
+                    continue
+                     
 
 
