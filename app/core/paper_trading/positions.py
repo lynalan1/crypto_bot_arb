@@ -1,9 +1,11 @@
 from sqlalchemy import text, create_engine
 from datetime import datetime, timezone, timedelta
-from config import SYMBOLS, DB_URL, NOTIONAL_USDT, FEE_SPOT, FEE_FUT, interval_hours_funding, PRICE_UPDATE_EVERY_SEC, MARKET
-import time 
+from config import SYMBOLS, DB_URL, NOTIONAL_USDT, FEE_SPOT, FEE_FUT, PRICE_UPDATE_EVERY_SEC, MARKET
 from decimal import Decimal
+import logging
+import time
 
+logger = logging.getLogger(__name__)
 
 def load_data_symbols(engine, symbol: str, market: str):
     sql = text("""
@@ -61,6 +63,7 @@ def load_paper_cashflow(symbol, engine):
     sql = text("""
     SELECT position_id, symbol, funding_time, funding_rate,
            mark_price, notional_usdt, cashflow_usdt
+    FROM paper_funding_cashflows
     WHERE symbol = :symbol
     ORDER BY ts DESC
     LIMIT 1
@@ -126,6 +129,8 @@ def apply_funding_cashflows(engine, dry_run: bool = True, limit_positions: int =
     results = []  
 
     with engine.begin() as conn:
+
+        conn.execute(text("SET LOCAL lock_timeout = '5s'"))
         positions = conn.execute(sql_positions, {"limit": limit_positions}).mappings().all()
 
         for pos in positions:
@@ -136,7 +141,6 @@ def apply_funding_cashflows(engine, dry_run: bool = True, limit_positions: int =
                 "symbol": symbol,
                 "last_ts": last_ts
             }).mappings().first()
-            print(next_f)
             if not next_f:
                 continue
 
@@ -193,7 +197,11 @@ def build_open_position(symbol, engine, market):
     data_fund = load_data_funding_events(symbol, engine)
     data_prem_ind = load_data_prem_ind(symbol, engine)
     data_order_bbo = load_order_bbo(symbol, engine)
-    if not (data_symbols and data_fund and data_prem_ind and data_order_bbo): return
+
+    if not all([data_symbols, data_fund, data_prem_ind, data_order_bbo]):
+
+        logger.warning(f"[build_open_position] missing data for {symbol}")
+        return None
 
     base_asset = data_symbols['base_asset']
     quote_asset = data_symbols['quote_asset']
@@ -214,7 +222,7 @@ def build_open_position(symbol, engine, market):
     fee_spot =  notional_spot * Decimal(FEE_SPOT)
     fee_fut =  notional_fut * Decimal(FEE_FUT)
 
-    price_pnl_usdt = 0
+    price_pnl_usdt = Decimal(0)
 
     fees_paid_usdt = fee_spot + fee_fut  
 
@@ -299,83 +307,86 @@ def refresh_open_positions(engine):
                 last_price_update_ts
             FROM paper_positions
             WHERE status = 'OPEN'
-            FOR UPDATE
         """)).mappings().all()
 
-        for pos in positions:
-            pid = pos["id"]
-            symbol = pos["symbol"]
+    for pos in positions:
 
+        pid = pos["id"]
+        symbol = pos["symbol"]
+        funding_new = Decimal(pos["funding_pnl_usdt"] or 0)
+       
+        price_pnl = Decimal(pos["price_pnl_usdt"] or 0)
+        can_update_price = (
+            pos["last_price_update_ts"] is None or
+            (now_utc - pos["last_price_update_ts"]).total_seconds() >= int(PRICE_UPDATE_EVERY_SEC)
+        )
+
+        if can_update_price:
+
+            bbo = load_order_bbo(symbol, engine)
+
+            if bbo:
+                qty = Decimal(pos["qty_base"])
+                spot_exit = Decimal(bbo["spot_bid_price"])
+                fut_exit  = Decimal(bbo["fut_ask_price"])
+                price_pnl = (
+                    qty * (spot_exit - Decimal(pos["spot_entry_price"])) +
+                    qty * (Decimal(pos["fut_entry_price"]) - fut_exit)
+                )
+
+       
+        fees = Decimal(pos["fees_paid_usdt"] or 0)
+        total = price_pnl + funding_new - fees
+        
+        with engine.begin() as conn:
             
-            inc = 0.0
-
-            funding_new = Decimal(pos["funding_pnl_usdt"] or 0) + Decimal(inc)
-
-           
-            price_pnl = Decimal(pos["price_pnl_usdt"] or 0)
-            can_update_price = (
-                pos["last_price_update_ts"] is None or
-                (now_utc - pos["last_price_update_ts"]).total_seconds() >= int(PRICE_UPDATE_EVERY_SEC)
-            )
-
-            if can_update_price:
-                bbo = load_order_bbo(symbol, engine)
-                if bbo:
-                    qty = Decimal(pos["qty_base"])
-                    spot_exit = Decimal(bbo["spot_bid_price"])
-                    fut_exit  = Decimal(bbo["fut_ask_price"])
-
-                    price_pnl = (
-                        qty * (spot_exit - Decimal(pos["spot_entry_price"])) +
-                        qty * (Decimal(pos["fut_entry_price"]) - fut_exit)
-                    )
-
-                    conn.execute(text("""
-                        UPDATE paper_positions
-                        SET price_pnl_usdt = :price_pnl,
-                            last_price_update_ts = :now_ts,
-                            updated_at = now()
-                        WHERE id = :pid
-                    """), {
-                        "pid": pid,
-                        "price_pnl": price_pnl,
-                        "now_ts": now_utc
-                    })
-
-           
-            fees = Decimal(pos["fees_paid_usdt"] or 0)
-            total = price_pnl + funding_new - fees
-
             conn.execute(text("""
                 UPDATE paper_positions
-                SET total_pnl_usdt = :total,
-                    updated_at = now()
+                SET total_pnl_usdt       = :total,
+                    price_pnl_usdt       = :price_pnl,
+                    last_price_update_ts = :now_ts,
+                    updated_at           = now()
                 WHERE id = :pid
             """), {
                 "pid": pid,
-                "total": total
+                "total": total,
+                "price_pnl": price_pnl,
+                "now_ts": now_utc
             })
+            
 
 if __name__ == "__main__":
     
     engine = create_engine(DB_URL)
+    sql = text("""
+                    SELECT id FROM paper_positions
+                    WHERE symbol = :symbol AND status = 'OPEN'
+                """)
     
-    for s in SYMBOLS:
-        for m in MARKET:
 
-            s = s.upper()
-            data_res = build_open_position(s, engine, m)
-            if data_res:
-                pid = open_position(engine, data_res)
+    for s in SYMBOLS:
+        symbol = s.upper()
+        for m in MARKET:
+            
+            with engine.begin() as conn:
+                existing = conn.execute(sql, {"symbol": symbol}).first()
+
+            if not existing:
+                data_res = build_open_position(symbol, engine, m)
+
+                if data_res:
+                    pid = open_position(engine, data_res)
+
+    last_funding_apply = datetime.now(timezone.utc)
 
     while True:
 
         refresh_open_positions(engine)
+        now = datetime.now(timezone.utc)
 
-        
-        if int(time.time()) % 60 == 0:
+        if (now - last_funding_apply).total_seconds() >= 60:
             apply_funding_cashflows(engine, dry_run=False)
+            last_funding_apply = now
+            logger.info(f"[positions] funding cashflows applied at {last_funding_apply}")
 
         time.sleep(1)
-
-        print(apply_funding_cashflows(engine, dry_run=True))
