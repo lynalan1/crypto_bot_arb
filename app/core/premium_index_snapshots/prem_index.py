@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from config import prem_ind
 import logging
 
+logger = logging.getLogger(__name__)
+
 def update_premium_index(engine, SYMBOLS):
 
     def get_premium_index(symbol="ETHUSDT", url_prem=''):
@@ -59,8 +61,6 @@ def update_premium_index(engine, SYMBOLS):
 
                 except Exception as e:
 
-                    logging.error(f"Failed for {s}: {e}")
+                    logger.error(f"Failed for {s}: {e}")
                     continue
                      
-
-
