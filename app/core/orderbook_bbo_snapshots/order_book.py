@@ -4,7 +4,9 @@ from sqlalchemy import text
 from datetime import datetime, timezone
 from collections import deque
 from config import spot_url_order, fut_url_order
+import logging
 
+logger = logging.getLogger(__name__)
 
 def floor_minute(dt: datetime) -> datetime:
         return dt.replace(second=0, microsecond=0)
@@ -295,14 +297,16 @@ async def processor(queue: asyncio.Queue, engine):
                         last_flush = bucket_10s
 
                 finally:
+                    logger.info("[order_book] data written to the database")
                     queue.task_done()
+
         except asyncio.CancelledError:
 
             
-            print("[shutdown] flushing open 1m windows...")
+            logger.info("[order_book] flushing open 1m windows")
             flush_open_1m_windows()
             await flush_to_db()
-            print("[shutdown] done")
+            logger.info("[order_book] done")
             raise  
 
 async def run_ws_orderbook_bbo(engine, SYMBOLS):
