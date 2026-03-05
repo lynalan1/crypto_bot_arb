@@ -1,6 +1,9 @@
 from sqlalchemy import text, create_engine
 from datetime import datetime, timezone
 from decimal import Decimal
+import logging
+
+logger = logging.getLogger(__name__)
 
 def apply_funding_cashflows(engine, SYMBOLS):
     
@@ -25,6 +28,7 @@ def apply_funding_cashflows(engine, SYMBOLS):
             ORDER BY funding_time
             LIMIT 1
         """)
+
         with engine.connect() as conn:
             return conn.execute(sql, {
                 "symbol": symbol,
@@ -47,6 +51,7 @@ def apply_funding_cashflows(engine, SYMBOLS):
     def load_paper_cashflow(engine, symbol):
 
             data_pos = load_pos(engine, symbol)
+            
             if not data_pos: return None
             data_funding = load_next_funding(engine, symbol, data_pos['last_funding_ts'])
 
@@ -55,10 +60,16 @@ def apply_funding_cashflows(engine, SYMBOLS):
             if data_funding["funding_time"] > datetime.now(timezone.utc): return None
             
             data_prem = load_data_prem_ind(engine, symbol, data_funding["funding_time"])
+            
+            if not data_prem:
+
+                logger.warning(f"[positions_cashflow] no mark_price for {symbol} at {data_funding['funding_time']}")
+                return None
+            
             # расчет параметров
-            notional_usdt = Decimal(data_pos['qty_base'] * data_prem['mark_price'])
+            notional_usdt = Decimal(str(data_pos['qty_base'])) * Decimal(str(data_prem['mark_price']))
             funding_rate = Decimal(data_funding['funding_rate'])
-            side = 1 if data_pos["fut_side"] == "LONG" else -1
+            side = Decimal(1) if data_pos["fut_side"] == "LONG" else Decimal(-1)
             cashflow_usdt = Decimal(-side * notional_usdt * funding_rate)
             
 
@@ -103,7 +114,13 @@ def apply_funding_cashflows(engine, SYMBOLS):
 
         sym = s.upper()
 
-        data_cashflow = load_paper_cashflow(engine, sym)
+        try:
+
+            data_cashflow = load_paper_cashflow(engine, sym)
+        except Exception as e:
+
+            logger.error(f'[positions_cashflow] failed for {sym}: {e}')
+            continue
 
         if not data_cashflow:
             continue
@@ -111,7 +128,7 @@ def apply_funding_cashflows(engine, SYMBOLS):
         with engine.begin() as conn:
             
             new_id = conn.execute(sql_cashflow, data_cashflow).scalar()
+            
             if new_id is not None:
                 conn.execute(sql_upd_pos, data_cashflow)
-
-
+                logger.info(f"[positions_cashflow] {sym}: cashflow {data_cashflow['cashflow_usdt']:.6f} USDT recorded")

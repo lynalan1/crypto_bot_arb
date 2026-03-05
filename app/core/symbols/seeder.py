@@ -12,7 +12,7 @@ def seed_symbols(engine, SYMBOLS):
     r_fut.raise_for_status()
     d_fut = r_fut.json()
 
-    def requests_sql(eng, params):
+    def upsert_symbol(eng, params):
 
         sql = text("""
             INSERT INTO symbols (
@@ -57,7 +57,6 @@ def seed_symbols(engine, SYMBOLS):
         clean_data_spot = None
         clean_data_fut = None
 
-        clean_data_spot = None
         for row in d_spot["symbols"]:
             if row["symbol"] == symbol:
                 clean_data_spot = {
@@ -68,8 +67,7 @@ def seed_symbols(engine, SYMBOLS):
                     "created_at": datetime.now(timezone.utc),
                 }
                 break
-
-        clean_data_fut = None
+            
         for row in d_fut["symbols"]:
             if (
                 row["symbol"] == symbol
@@ -100,7 +98,7 @@ def seed_symbols(engine, SYMBOLS):
                         'updated_at' : datetime.now(timezone.utc),
                         }
             
-            requests_sql(eng, params_spot)
+            upsert_symbol(eng, params_spot)
 
         if data_fut:
             params_fut = {'symbol' : data_fut['symbol'],
@@ -112,7 +110,7 @@ def seed_symbols(engine, SYMBOLS):
                         'updated_at' : datetime.now(timezone.utc),
                         }
             
-            requests_sql(eng, params_fut)
+            upsert_symbol(eng, params_fut)
         
 
     for s in SYMBOLS:   
@@ -123,6 +121,12 @@ def seed_symbols(engine, SYMBOLS):
 
         try:
             data_spot, data_fut = get_market_sym(symbol=s.upper())
+
+            if not data_spot or not data_fut:
+                
+                logger.warning(f"[seeder] {s}: not found in spot or futures")
+                continue
+
             update_sql(data_spot, data_fut, engine)
             logger.info(f"[seeder] {s}: upserted")
 

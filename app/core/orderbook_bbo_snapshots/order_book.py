@@ -128,7 +128,7 @@ async def processor(queue: asyncio.Queue, engine):
         
             nonlocal last_flush
 
-            print(f"[flush] 5s={len(snapshot_to_db_5s)} 1m={len(snapshot_to_db_1m)}")
+            logger.info(f"[flush] 5s={len(snapshot_to_db_5s)} 1m={len(snapshot_to_db_1m)}")
 
             with engine.begin() as conn:
 
@@ -281,7 +281,7 @@ async def processor(queue: asyncio.Queue, engine):
 
                     if last_flush != bucket_10s:
 
-                        print(f"[flush] 5s={len(snapshot_to_db_5s)} 1m={len(snapshot_to_db_1m)}")
+                        logger.info(f"[flush] 5s={len(snapshot_to_db_5s)} 1m={len(snapshot_to_db_1m)}")
                         with engine.begin() as conn:
                             
                             if len(snapshot_to_db_5s) != 0:
@@ -297,7 +297,6 @@ async def processor(queue: asyncio.Queue, engine):
                         last_flush = bucket_10s
 
                 finally:
-                    logger.info("[order_book] data written to the database")
                     queue.task_done()
 
         except asyncio.CancelledError:

@@ -2,7 +2,7 @@
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Callable, Awaitable, Optional
+from typing import Callable, Awaitable
 from config import DB_URL, SYMBOLS
 
 from sqlalchemy import create_engine
@@ -38,10 +38,7 @@ def setup_logging() -> None:
 
 
 async def forever(name: str, coro_factory: Callable[[], Awaitable[None]], restart_delay: float = 2.0):
-    """
-    Запускает задачу навсегда. Если упала — логируем и перезапускаем.
-    coro_factory нужен, чтобы после падения создалась новая корутина.
-    """
+    
     log = logging.getLogger(f"runner.{name}")
     while True:
         try:
@@ -61,33 +58,39 @@ async def periodic(
     every: float,
     run_immediately: bool = True,
 ):
-    """
-    Периодический синхронный вызов (под твою текущую SQLAlchemy логику).
-    Если fn долго выполняется — период сдвинется (это нормально для простого runner).
-    """
+    
     log = logging.getLogger(f"runner.{name}")
+    loop = asyncio.get_running_loop()
+
     if run_immediately:
         try:
-            fn()
+            await loop.run_in_executor(None, fn)
         except Exception:
             log.exception("periodic run failed")
 
     while True:
         await asyncio.sleep(every)
         try:
-            fn()
+            await loop.run_in_executor(None, fn)
+            
         except Exception:
             log.exception("periodic run failed")
+
 
 
 async def main(cfg: RunnerConfig):
 
     log = logging.getLogger("runner")
-    engine = create_engine(cfg.db_url, pool_pre_ping=True)
+    engine = create_engine(
+    cfg.db_url,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=2,
+    )
 
     async def ws_task():
 
-        await run_ws_orderbook_bbo(engine=engine, symbols=cfg.symbols)
+        await run_ws_orderbook_bbo(engine=engine, SYMBOLS=cfg.symbols)
         
     
     def refresh_positions_job():
@@ -111,7 +114,7 @@ async def main(cfg: RunnerConfig):
 
     def seed_symbols_job():
 
-        seed_symbols(engine, symbols=cfg.symbols)
+        seed_symbols(engine, SYMBOLS=cfg.symbols)
         
 
     log.info("Starting runner | dry_run=%s | symbols=%s", cfg.symbols)
@@ -130,6 +133,9 @@ async def main(cfg: RunnerConfig):
     finally:
         for t in tasks:
             t.cancel()
+
+        await asyncio.gather(*tasks, return_exceptions=True)
+        log.info("runner shutdown complete")
 
 
 if __name__ == "__main__":
