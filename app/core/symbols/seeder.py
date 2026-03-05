@@ -1,10 +1,17 @@
 import requests
 from datetime import datetime, timezone
-from sqlalchemy import create_engine, text
+from sqlalchemy import  text
 from config import url_fut_sym, url_spot_sym
+import logging
+
+logger = logging.getLogger(__name__)
 
 def seed_symbols(engine, SYMBOLS):
     
+    r_fut = requests.get(url_fut_sym, timeout=10)
+    r_fut.raise_for_status()
+    d_fut = r_fut.json()
+
     def requests_sql(eng, params):
 
         sql = text("""
@@ -43,13 +50,10 @@ def seed_symbols(engine, SYMBOLS):
         params = {"symbol": symbol,}
 
         r_spot = requests.get(url_spot_sym, params=params, timeout=10)
-        r_fut = requests.get(url_fut_sym, timeout=10)
 
         r_spot.raise_for_status()
-        r_fut.raise_for_status()
 
         d_spot = r_spot.json()
-        d_fut = r_fut.json()
         clean_data_spot = None
         clean_data_fut = None
 
@@ -111,7 +115,17 @@ def seed_symbols(engine, SYMBOLS):
             requests_sql(eng, params_fut)
         
 
-        for s in SYMBOLS:
+    for s in SYMBOLS:   
+        
+        if not s or not s.strip():
+            logger.warning(f"[seeder] skipping empty symbol")
+            continue
 
+        try:
             data_spot, data_fut = get_market_sym(symbol=s.upper())
             update_sql(data_spot, data_fut, engine)
+            logger.info(f"[seeder] {s}: upserted")
+
+        except Exception as e:
+            logger.error(f'[seeder] failed for {s}: {e}')
+            continue
