@@ -50,7 +50,7 @@ def get_funding_history_for_symbol(engine, symbol, days=30):
                positive_ratio
         FROM funding_stats_daily
         WHERE symbol = :symbol
-        AND day >= now() - interval ':days days'
+        AND day >= now() - interval ':days'
         ORDER BY day ASC
     """)
     with engine.connect() as conn:
