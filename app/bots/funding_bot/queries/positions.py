@@ -61,7 +61,7 @@ def get_cashflow_history(engine, symbol, limit=10):
 
     with engine.connect() as conn:
 
-        return conn.execute(sql, {'symbol': symbol, "limit": limit}).mappings().first()
+        return conn.execute(sql, {'symbol': symbol, "limit": limit}).mappings().all()
 
 def get_positions_pnl_alert(engine, threshold_pct=0.02):
     # Позиции где total_pnl превысил порог от notional — для алерта
