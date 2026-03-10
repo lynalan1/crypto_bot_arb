@@ -7,7 +7,6 @@ from config import DB_URL, SYMBOLS
 
 from sqlalchemy import create_engine
 
-
 from app.core.orderbook_bbo_snapshots.order_book import run_ws_orderbook_bbo 
 from app.core.paper_trading.positions import refresh_open_positions  
 from app.core.paper_trading.positions_cashflow import apply_funding_cashflows 
@@ -15,7 +14,7 @@ from app.core.funding_collector.funding_events import update_funding_events
 from app.core.funding_collector.funding_stats_daily import get_funding_stats
 from app.core.premium_index_snapshots.prem_index import update_premium_index  
 from app.core.symbols.seeder import seed_symbols
-
+from app.bots.funding_bot.bot import run_bot
 
 @dataclass
 class RunnerConfig:
@@ -122,7 +121,7 @@ async def main(cfg: RunnerConfig):
 
         get_funding_stats(engine=engine, SYMBOLS=cfg.symbols)
 
-    log.info("Starting runner | dry_run=%s | symbols=%s", cfg.symbols)
+    log.info("Starting runner | dry_run=%s | symbols=%s", cfg.dry_run, cfg.symbols)
 
     tasks = [
         asyncio.create_task(forever("ws_orderbook_bbo", lambda: ws_task())),
@@ -131,7 +130,8 @@ async def main(cfg: RunnerConfig):
         asyncio.create_task(periodic("update_funding_events", update_funding_job, every=cfg.update_funding_every)),
         asyncio.create_task(periodic("update_premium_index", update_premium_job, every=cfg.update_premium_every)),
         asyncio.create_task(periodic("seed_symbols", seed_symbols_job, every=cfg.seed_symbols_every, run_immediately=True)),
-        asyncio.create_task(periodic("funding_stats", get_funding_stats_job, every=cfg.funding_stats_every, run_immediately=True))
+        asyncio.create_task(periodic("funding_stats", get_funding_stats_job, every=cfg.funding_stats_every, run_immediately=True)),
+        asyncio.create_task(forever("telegram_bot", lambda: run_bot(engine)))
 
     ]
 
