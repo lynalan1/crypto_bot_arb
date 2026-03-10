@@ -1,24 +1,23 @@
 from sqlalchemy import text
 
 
-def get_top_funding_symbols(engine, limit=10):
-    # Топ символов по среднему funding rate за последние N дней
-
+def get_top_funding_symbols(engine, limit: int = 10):
     sql = text("""
-        SELECT symbol,
-               AVG(funding_mean)    as avg_funding,
-               AVG(positive_ratio)  as avg_positive_ratio,
-               COUNT(*)             as days_count
-        FROM funding_stats_daily
-        WHERE day >= now() - interval '30 days'
-        GROUP BY symbol
-        ORDER BY avg_funding DESC
+        SELECT
+            UPPER(symbol)               AS symbol,
+            AVG(funding_rate)           AS avg_funding,
+            SUM(CASE WHEN funding_rate > 0 THEN 1 ELSE 0 END) * 1.0
+                / COUNT(*)              AS avg_positive_ratio,
+            COUNT(DISTINCT DATE(funding_time)) AS days_count
+        FROM funding_events
+        WHERE funding_time >= now() - (30 * interval '1 day')
+        GROUP BY UPPER(symbol)
+        ORDER BY AVG(funding_rate) DESC
         LIMIT :limit
     """)
 
     with engine.connect() as conn:
-
-        return conn.execute(sql, {'limit' : limit}).mappings().all()
+        return conn.execute(sql, {"limit": limit}).mappings().all()
     
 def get_funding_anomalies(engine, threshold=0.001):
 
