@@ -6,10 +6,11 @@ def menu_button_row() -> list:
     return [InlineKeyboardButton("🏠 Главное меню", callback_data="go_menu")]
 
 
-def with_menu_button(rows: list) -> InlineKeyboardMarkup:
-    """Оборачивает список кнопок добавляя строку меню снизу."""
-    return InlineKeyboardMarkup(rows + [menu_button_row()])
-
+def with_menu_button(rows: list, lang: str = "ru") -> InlineKeyboardMarkup:
+    from app.bots.funding_bot.i18n import t
+    return InlineKeyboardMarkup(rows + [[
+        InlineKeyboardButton(t(lang, "btn_menu"), callback_data="go_menu")
+    ]])
 
 def get_reply_funcs(update):
     if update.message:
@@ -24,3 +25,10 @@ def get_reply_funcs(update):
         query.message.reply_photo,
         query.from_user.id,
     )
+
+def get_lang(context, engine, telegram_id: int) -> str:
+    """Язык из кэша user_data или из БД."""
+    if "lang" not in context.user_data:
+        from app.bots.funding_bot.queries.lang import get_user_lang
+        context.user_data["lang"] = get_user_lang(engine, telegram_id)
+    return context.user_data["lang"]

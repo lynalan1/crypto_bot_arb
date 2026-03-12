@@ -1,22 +1,18 @@
 import logging
-from telegram import Update
-from telegram.ext import ContextTypes, CommandHandler
+from telegram.ext import CommandHandler
 from datetime import datetime, timezone, timedelta
 from app.bots.funding_bot.queries.funding_stats import get_top_funding_symbols
 from app.bots.funding_bot.formatters.funding_fmt import format_top_funding
 from app.bots.funding_bot.formatters.analytics_fmt import plot_top_funding_symbols
-from app.bots.funding_bot.utils import with_menu_button
 logger = logging.getLogger(__name__)
-
-
-
+from app.bots.funding_bot.utils import with_menu_button
 
 
 def _next_funding_time() -> str:
 
     now   = datetime.now(timezone.utc)
     hour  = now.hour
-    # Следующий расчётный час
+    
     next_hour = ((hour // 8) + 1) * 8 % 24
     next_dt   = now.replace(hour=next_hour, minute=0, second=0, microsecond=0)
 
@@ -36,7 +32,6 @@ def _next_funding_time() -> str:
 
 
 async def funding_command(update, context, engine) -> None:
-    from app.bots.funding_bot.utils import with_menu_button
 
     if update.message:
         reply_text  = update.message.reply_text
@@ -62,7 +57,7 @@ async def funding_command(update, context, engine) -> None:
         )
         return
 
-    # ✅ Добавляем countdown сверху
+    
     header = _next_funding_time() + "\n\n"
 
     await reply_text(

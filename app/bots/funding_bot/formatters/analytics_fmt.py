@@ -121,27 +121,44 @@ def plot_basis_history(data: list, symbol: str) -> BytesIO:
         return _empty_chart("No basis data")
 
     df = pd.DataFrame(data)
+    x  = pd.to_datetime(df['ts'])
+    y  = df['basis_pct'].astype(float) * 100  # в проценты
 
-    # ✅ правильные названия колонок из get_basis_history
-    x = pd.to_datetime(df['ts'])
-    y = df['basis_pct'].astype(float)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 6), gridspec_kw={'height_ratios': [3, 1]})
+    _apply_style(fig, ax1)
+    _apply_style(fig, ax2)
 
-    fig, ax = plt.subplots(figsize=(10, 4))
-    _apply_style(fig, ax)
+    # Верхний график — basis_pct
+    ax1.plot(x, y, color=STYLE['blue'], linewidth=1.5, label='Basis %')
+    ax1.fill_between(x, y, 0, where=(y >= 0), color=STYLE['green'], alpha=0.2)
+    ax1.fill_between(x, y, 0, where=(y <  0), color=STYLE['red'],   alpha=0.2)
+    ax1.axhline(0, color=STYLE['text'], linewidth=0.8, linestyle='--', alpha=0.5)
 
-    color = STYLE['green']
-    ax.plot(x, y, color=color, linewidth=1.5)
-    ax.fill_between(x, y, 0, where=(y >= 0), color=STYLE['green'], alpha=0.15)
-    ax.fill_between(x, y, 0, where=(y <  0), color=STYLE['red'],   alpha=0.15)
-    ax.axhline(0, color=STYLE['text'], linewidth=0.8, linestyle='--', alpha=0.4)
+    # Скользящее среднее
+    if len(y) > 10:
+        ma = y.rolling(window=10, min_periods=1).mean()
+        ax1.plot(x, ma, color=STYLE['green'], linewidth=1.2,
+                 linestyle='--', alpha=0.8, label='MA(10)')
 
-    ax.set_title(f'Basis History — {symbol}', fontsize=12, pad=12)
-    ax.set_ylabel('Basis %', fontsize=10)
-    ax.yaxis.set_major_formatter(mticker.FormatStrFormatter('%.4f%%'))
+    ax1.set_title(f'Basis History — {symbol}  |  7d', fontsize=12, pad=10)
+    ax1.set_ylabel('Basis %', fontsize=9)
+    ax1.yaxis.set_major_formatter(mticker.FormatStrFormatter('%.3f%%'))
+    ax1.legend(facecolor=STYLE['bg_axes'], labelcolor=STYLE['text'], fontsize=8)
+
+
+    if 'spot_mid' in df.columns:
+        sp = df['spot_mid'].astype(float)
+        ax2.plot(x, sp, color=STYLE['text'], linewidth=1.0, alpha=0.7)
+        ax2.set_ylabel('Spot price', fontsize=8)
+        ax2.yaxis.set_major_formatter(
+            mticker.FuncFormatter(lambda v, _: f'${v:,.0f}')
+        )
+
     fig.autofmt_xdate()
-    _apply_style(fig, ax)
+    fig.tight_layout()
 
     return _to_image(fig)
+
 
 def plot_top_funding_symbols(data) -> BytesIO:
 
