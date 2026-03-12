@@ -285,7 +285,7 @@ def register_start_handlers(app, engine):
     app.add_handler(CommandHandler("about", lambda u, c: about_command(u, c, engine)))
 
     app.add_handler(CallbackQueryHandler(lambda u, c: set_lang_callback(u, c, engine), pattern="^set_lang:"))
-    app.add_handler(CallbackQueryHandler(lambda u, c: menu_callback(u, c, engine), pattern="^menu_"))
+    app.add_handler(CallbackQueryHandler(lambda u, c: menu_callback(u, c, engine), pattern="^menu_(funding|analytics|profile)$"))
     app.add_handler(CallbackQueryHandler(lambda u, c: open_about_callback(u, c, engine), pattern="^open_about$"))
     app.add_handler(CallbackQueryHandler(lambda u, c: about_page_callback(u, c, engine), pattern="^about_page:"))
     app.add_handler(CallbackQueryHandler(lambda u, c: about_menu_callback(u, c, engine), pattern="^about_menu$"))
