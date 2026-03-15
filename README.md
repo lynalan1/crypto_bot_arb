@@ -1,39 +1,42 @@
+# 🤖 Funding Rate Arbitrage Bot
+
+Telegram bot for **funding rate arbitrage research** on Binance.  
+Screener, PnL simulation, basis analytics — across 80+ symbols.
+
+**Live demo → [@arbengin_bot](https://t.me/arbengin_bot)**
 
 ---
 
-# 📈 Crypto Funding Arbitrage Research Platform
+## 💡 What is Funding Rate Arbitrage?
 
-## 🧠 Overview
+Every 8 hours Binance charges a fee between longs and shorts on futures — called the **funding rate**.
 
-This project is a **data-driven research platform for funding-rate arbitrage strategies** on cryptocurrency exchanges (Binance).
+**The strategy:**
+- Open **Long spot** + **Short futures** on the same asset simultaneously
+- Price goes up → spot gains, futures loses → **net: 0**
+- Price goes down → spot loses, futures gains → **net: 0**
+- Every 8 hours → short receives funding payment ✅
 
-The system:
-
-* collects **raw market & funding data**,
-* builds **aggregated analytical datasets**,
-* and simulates **paper (virtual) positions** to evaluate funding arbitrage profitability **without risking real capital**.
-
-The main focus is **spot ↔ futures funding arbitrage** and basis analysis.
+Market direction doesn't matter. You just collect the funding.
 
 ---
 
-## 🎯 Goals of the Project
+## ✨ Features
 
-* Build a **reliable data pipeline** for funding and orderbook data
-* Analyze **funding behavior over time** (daily statistics)
-* Track **basis (futures – spot)** dynamics
-* Simulate **paper trading strategies** based on funding
-* Provide a solid foundation for future:
-
-  * backtesting
-  * strategy optimization
-  * live alerts / execution
+| Feature | Description |
+|---|---|
+| 🔍 **Screener** | Top symbols ranked by yield and stability |
+| ⏰ **Funding Timer** | Countdown to next payment per symbol |
+| 🧮 **Simulation** | PnL calculation on real historical data with fees |
+| 📈 **Basis Analytics** | Futures vs spot spread dynamics |
+| 👤 **Profile** | Save and track your simulations |
+| 🌐 **i18n** | Russian and English language support |
 
 ---
 
-## 🏗️ Architecture (High Level)
+## 🏗️ Architecture
 
-```text
+```
 Binance API / WebSocket
         ↓
  Raw Events Layer
@@ -44,212 +47,207 @@ Binance API / WebSocket
         ↓
  Simulation Layer
  (paper_positions, paper_funding_cashflows)
+        ↓
+ Telegram Bot
+ (screener, simulate, analytics, profile)
 ```
 
-Each layer is **decoupled** and can be tested independently.
-
 ---
 
-## 🧩 Data Model
+## 🗂️ Project Structure
 
-### 1️⃣ `symbols`
-
-Reference table for all tradable instruments.
-
-Used to enforce data consistency via foreign keys.
-
-**Example fields:**
-
-* `symbol` (BTCUSDT)
-* `base_asset` (BTC)
-* `quote_asset` (USDT)
-* `market` (spot / futures_um)
-* `is_active`
-
----
-
-### 2️⃣ `funding_events`
-
-Raw funding-rate events from Binance Futures.
-
-Each row represents **one funding timestamp**.
-
-**Key fields:**
-
-* `symbol`
-* `funding_time`
-* `funding_rate`
-* `collected_at`
-
-Purpose:
-
-* immutable raw data
-* source of truth for all funding analytics
-
----
-
-### 3️⃣ `funding_stats_daily`
-
-Daily aggregated funding statistics per symbol.
-
-Computed from `funding_events`.
-
-**Metrics:**
-
-* `intervals_count` — number of funding events in the day
-* `funding_mean`
-* `funding_std`
-* `funding_min / funding_max`
-* `positive_ratio` — share of positive funding intervals
-
-Used to:
-
-* analyze long-term funding behavior
-* identify persistent funding bias
-
----
-
-### 4️⃣ `orderbook_bbo_snapshots`
-
-Best Bid / Best Ask snapshots for **spot and futures**.
-
-Collected via WebSocket with time-bucketing.
-
-**Key fields:**
-
-* spot & futures bid/ask prices
-* mid prices
-* basis (absolute & %)
-* timestamped snapshots
-
----
-
-### 5️⃣ `basis_ohlc_1m`
-
-1-minute aggregated basis & spread statistics.
-
-Built from `orderbook_bbo_snapshots`.
-
-**Metrics:**
-
-* average / min / max basis
-* average spot & futures spread
-* samples count
-
-Used for:
-
-* volatility analysis
-* liquidity & execution quality estimation
-
----
-
-### 6️⃣ `paper_positions`
-
-Virtual (paper) trading positions.
-
-Represents **current simulated state** of a strategy.
-
-**Examples:**
-
-* long spot + short futures
-* position size, entry price, timestamps
-
----
-
-### 7️⃣ `paper_funding_cashflows`
-
-Funding-related cashflows for paper positions.
-
-Each row = **one funding payment event**.
-
-Allows:
-
-* precise PnL calculation
-* cumulative funding tracking
-* strategy-level performance analysis
+```
+app/
+├── core/
+│   ├── funding_collector/         # Binance funding events collector
+│   │   ├── funding_events.py      # Raw WebSocket collector
+│   │   └── funding_stats_daily.py # Daily aggregation
+│   ├── orderbook_bbo_snapshots/   # BBO snapshots via WebSocket
+│   ├── premium_index_snapshots/   # Premium index data
+│   ├── paper_trading/             # Virtual positions & cashflows
+│   ├── symbols/                   # Symbol seeder
+│   └── runner.py                  # Core services runner
+│
+└── bots/
+    └── funding_bot/
+        ├── handlers/              # Telegram command handlers
+        │   ├── start.py           # /start, /menu, /help, /about
+        │   ├── positions.py       # /positions — funding timer per symbol
+        │   ├── funding.py         # /funding — top symbols
+        │   ├── screener.py        # /screener — filter by criteria
+        │   ├── simulate.py        # /simulate — PnL simulation
+        │   ├── analytics.py       # /stats — basis analytics
+        │   └── profile.py         # /profile — saved simulations
+        ├── formatters/            # Message formatters & charts
+        ├── queries/               # DB queries
+        ├── i18n.py                # RU/EN translations
+        ├── utils.py               # Helpers
+        └── bot.py                 # App builder & polling
+```
 
 ---
 
 ## ⚙️ Tech Stack
 
-* **Python 3.10+**
-* **PostgreSQL**
-* **SQLAlchemy**
-* **Binance REST & WebSocket API**
-* **Docker / Docker Compose**
-* Async IO (`asyncio`, `websockets`)
+- **Python 3.10+**
+- **PostgreSQL**
+- **SQLAlchemy** (sync, Core)
+- **python-telegram-bot 20+** (async)
+- **Binance REST & WebSocket API**
+- **Matplotlib** — charts
+- **Docker / Docker Compose**
 
 ---
 
-## 🧪 Design Principles
+## 🚀 Setup
 
-* **Event-driven architecture**
-* **Time-bucketed aggregation** (5s / 1m / 1d)
-* **Idempotent writes** (`ON CONFLICT DO UPDATE`)
-* **Separation of concerns**:
-
-  * raw data ≠ aggregates ≠ strategy state
-* **Paper trading before real capital**
-
----
-
-## 🚀 How to Run (Simplified)
+### 1. Clone
 
 ```bash
-# 1. Start PostgreSQL
+git clone https://github.com/lynalan1/funding-arb-bot
+cd funding-arb-bot
+```
+
+### 2. Create virtual environment
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Linux/macOS
+.venv\Scripts\activate           # Windows
+```
+
+### 3. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Configure environment
+
+Create `.env` in the project root:
+
+```env
+# Telegram
+TELEGRAM_TOKEN=your_bot_token_here
+
+# PostgreSQL
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=funding_arb
+DB_USER=postgres
+DB_PASSWORD=your_password_here
+
+# Binance (read-only, no trading required)
+BINANCE_API_KEY=your_api_key
+BINANCE_API_SECRET=your_api_secret
+```
+
+### 5. Start PostgreSQL
+
+```bash
 docker-compose up -d
+```
 
-# 2. Seed symbols
+### 6. Seed symbols
+
+```bash
 python app/core/symbols/seeder.py
+```
 
-# 3. Collect funding events
-python app/core/funding_collector/fetch_funding.py
+### 7. Start data collectors
 
-# 4. Build daily funding stats
-python app/core/funding_stats/daily_agg.py
+```bash
+# Collect raw funding events from Binance
+python app/core/funding_collector/funding_events.py
 
-# 5. Start orderbook WebSocket collector
-python app/core/orderbook/orderbook_ws.py
+# Build daily funding stats
+python app/core/funding_collector/funding_stats_daily.py
+
+# Start orderbook WebSocket collector
+python app/core/orderbook_bbo_snapshots/order_book.py
+```
+
+### 8. Run the bot
+
+```bash
+python main.py
 ```
 
 ---
 
-## 📊 Example Use Cases
+## 🗄️ Database Schema (key tables)
 
-* Identify symbols with **persistently positive funding**
-* Compare **funding vs basis** dynamics
-* Simulate funding-arbitrage profitability over months
-* Evaluate liquidity & spread impact on execution
-* Build alerts for abnormal funding/basis conditions
+```sql
+CREATE TABLE bot_users (
+    telegram_id BIGINT PRIMARY KEY,
+    username    TEXT,
+    language    VARCHAR(2) DEFAULT 'ru',
+    created_at  TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE funding_events (
+    id           SERIAL PRIMARY KEY,
+    symbol       TEXT NOT NULL,
+    funding_rate NUMERIC NOT NULL,
+    funding_time TIMESTAMPTZ NOT NULL,
+    collected_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE funding_stats_daily (
+    symbol          TEXT NOT NULL,
+    day             DATE NOT NULL,
+    intervals_count INTEGER,
+    funding_mean    NUMERIC,
+    funding_std     NUMERIC,
+    funding_min     NUMERIC,
+    funding_max     NUMERIC,
+    positive_ratio  NUMERIC,
+    PRIMARY KEY (symbol, day)
+);
+
+CREATE TABLE user_simulations (
+    id              SERIAL PRIMARY KEY,
+    telegram_id     BIGINT REFERENCES bot_users(telegram_id),
+    symbol          TEXT,
+    side            TEXT,
+    notional_usdt   NUMERIC,
+    date_from       TIMESTAMPTZ,
+    date_to         TIMESTAMPTZ,
+    days            INTEGER,
+    funding_pnl     NUMERIC,
+    fees            NUMERIC,
+    total_pnl       NUMERIC,
+    total_pnl_pct   NUMERIC,
+    intervals_count INTEGER,
+    created_at      TIMESTAMPTZ DEFAULT now()
+);
+```
 
 ---
 
-## 🧠 Why This Project Matters
+## 📊 Bot Commands
 
-This project demonstrates:
-
-* real-world **market data engineering**
-* understanding of **derivatives mechanics**
-* correct handling of **time-series data**
-* ability to design **research-grade trading infrastructure**
-
-It is intentionally built as a **research & simulation platform**, not a “black-box trading bot”.
-
----
-
-## 🛣️ Roadmap
-
-* [ ] Strategy backtesting engine
-* [ ] Risk metrics (drawdown, variance)
-* [ ] Multi-exchange support
-* [ ] Telegram / Web dashboard
-* [ ] Live alerting on funding anomalies
+| Command | Description |
+|---|---|
+| `/start` | Start the bot, choose language |
+| `/menu` | Main menu |
+| `/funding` | Top 10 symbols by funding rate |
+| `/positions` | Funding timer & stats per symbol |
+| `/screener` | Filter symbols by rate / stability / period |
+| `/simulate` | Simulate PnL on historical data |
+| `/stats` | Basis and spread analytics |
+| `/profile` | Your saved simulations |
+| `/about` | How the strategy works (5 pages) |
+| `/help` | All commands |
 
 ---
 
 ## ⚠️ Disclaimer
 
-This project is for **research and educational purposes only**.
-It does **not** execute real trades or manage real funds.
+This project is for **research and educational purposes only**.  
+It does **not** execute real trades or manage real funds.  
+Always do your own research before trading.
 
 ---
+
+Live bot: [@arbengin_bot](https://t.me/arbengin_bot)
