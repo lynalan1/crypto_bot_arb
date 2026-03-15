@@ -209,24 +209,40 @@ async def choose_period(update: Update, context: ContextTypes.DEFAULT_TYPE, engi
 
     return ConversationHandler.END
 
-async def save_to_profile(update: Update, context: ContextTypes.DEFAULT_TYPE, engine) -> None:
-    query = update.callback_query
+async def save_to_profile(update, context, engine) -> None:
+    query       = update.callback_query
     telegram_id = update.effective_user.id
-    summary = context.user_data.get("last_summary")
-    lang = context.user_data.get("lang", "ru")
+    summary     = context.user_data.get("last_summary")
+    lang        = context.user_data.get("lang", "ru")
     await query.answer()
+
     if not summary:
-        await query.answer("❌ Нет данных для сохранения — запусти симуляцию заново", show_alert=True)
+        await query.answer(
+            "❌ Нет данных — запусти симуляцию заново"
+            if lang == "ru" else
+            "❌ No data — run a new simulation",
+            show_alert=True,
+        )
         return
+
     try:
         from app.bots.funding_bot.queries.simulation import save_simulation
         sim_id = save_simulation(engine, telegram_id, summary)
         await query.edit_message_reply_markup(reply_markup=_saved_keyboard(lang))
-        await query.message.reply_text("✅ Симуляция сохранена в профиль.\nСмотри: /profile", parse_mode="HTML")
+        await query.message.reply_text(
+            "✅ Симуляция сохранена в профиль.\nСмотри: /profile"
+            if lang == "ru" else
+            "✅ Simulation saved to profile.\nCheck: /profile",
+            parse_mode="HTML",
+        )
         logger.info(f"[simulate] saved sim_id={sim_id} for user={telegram_id}")
     except Exception as e:
         logger.error(f"[simulate] save failed: {e}")
-        await query.answer("❌ Ошибка при сохранении", show_alert=True)
+        await query.answer(
+            "❌ Ошибка при сохранении" if lang == "ru" else "❌ Save failed",
+            show_alert=True,
+        )
+
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
@@ -318,4 +334,5 @@ def build_simulate_handler(engine) -> ConversationHandler:
         fallbacks=[CommandHandler("cancel", cancel), CallbackQueryHandler(_go_to_menu, pattern="^sim_menu$")],
         per_user=True,
         per_chat=True,
+        allow_reentry=True,
     )

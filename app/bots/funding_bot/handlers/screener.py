@@ -273,4 +273,5 @@ def build_screener_handler(engine) -> ConversationHandler:
         fallbacks=[],
         per_user=True,
         per_chat=True,
+        allow_reentry=True,
     )

@@ -60,30 +60,127 @@ _ABOUT_PAGES = {
         ),
     ],
     "en": [
-        (
-            "📚 <b>Funding Rate Arbitrage</b>\n"
-            "<i>Page 1 of 5</i>\n\n"
-            "Spot = real asset\n"
-            "Futures = perpetual contract\n\n"
-            "Funding payment every 8 hours.\n"
-        ),
-    ],
+    # Page 1
+    (
+        "📚 <b>Funding Rate Arbitrage Explained</b>\n"
+        "<i>Page 1 of 5 — What is funding rate?</i>\n\n"
+        "Crypto exchanges have two markets for the same asset:\n"
+        "• <b>Spot</b> — you buy the actual token\n"
+        "• <b>Futures (Perp)</b> — you trade a contract with no expiry date\n\n"
+        "To keep the futures price close to spot, the exchange every "
+        "<b>8 hours</b> charges or pays a fee between longs and shorts.\n"
+        "This fee is called the <b>funding rate</b>.\n\n"
+        "🟢 Positive rate → longs pay shorts\n"
+        "🔴 Negative rate → shorts pay longs\n"
+    ),
+    # Page 2
+    (
+        "📚 <b>Funding Rate Arbitrage Explained</b>\n"
+        "<i>Page 2 of 5 — Strategy overview</i>\n\n"
+        "The idea: <b>earn funding without taking market direction risk.</b>\n\n"
+        "When rate is positive — open two positions simultaneously:\n"
+        "• <b>Long spot</b> — buy the token on spot\n"
+        "• <b>Short futures</b> — sell a futures contract for the same amount\n\n"
+        "What happens:\n"
+        "• Price rises → spot gains, futures loses → <b>net: 0</b>\n"
+        "• Price drops → spot loses, futures gains → <b>net: 0</b>\n"
+        "• Every 8 hours → short receives funding payment ✅\n\n"
+        "Positions hedge each other — market risk is <b>neutralized</b>.\n"
+    ),
+    # Page 3
+    (
+        "📚 <b>Funding Rate Arbitrage Explained</b>\n"
+        "<i>Page 3 of 5 — The math</i>\n\n"
+        "<b>Example with ETHUSDT:</b>\n\n"
+        "Notional: <code>10,000 USDT</code>\n"
+        "Funding rate: <code>+0.01%</code> every 8 hours\n\n"
+        "Income per payment:\n"
+        "<code>10,000 × 0.0001 = 1 USDT</code>\n\n"
+        "Per day (3 payments):\n"
+        "<code>1 × 3 = 3 USDT</code>\n\n"
+        "Per month (90 payments):\n"
+        "<code>1 × 90 = 90 USDT → 0.9% per month</code>\n\n"
+        "Entry + exit fees:\n"
+        "<code>10,000 × 0.001 × 2 = 20 USDT</code>\n\n"
+        "Net profit: <code>90 - 20 = 70 USDT (~8.4% annual)</code>\n"
+    ),
+    # Page 4
+    (
+        "📚 <b>Funding Rate Arbitrage Explained</b>\n"
+        "<i>Page 4 of 5 — Risks</i>\n\n"
+        "<b>The strategy is not risk-free. Main risks:</b>\n\n"
+        "⚠️ <b>Rate goes negative</b>\n"
+        "You opened at +0.01%, rate became -0.005% — now you're paying.\n"
+        "Solution: monitor rate and close position when sign changes.\n\n"
+        "⚠️ <b>Futures liquidation</b>\n"
+        "Sharp price moves can trigger a margin call on the short.\n"
+        "Solution: no leverage, keep margin buffer.\n\n"
+        "⚠️ <b>Basis risk</b>\n"
+        "Spot and futures prices can temporarily diverge.\n\n"
+        "⚠️ <b>Fees eat profits</b>\n"
+        "On small amounts and short periods, fees &gt; funding.\n"
+        "Solution: hold position long enough, use maker orders.\n\n"
+        "✅ Use /screener and /simulate to find symbols with "
+        "the best risk/reward ratio.\n"
+    ),
+    # Page 5
+    (
+        "📚 <b>Funding Rate Arbitrage Explained</b>\n"
+        "<i>Page 5 of 5 — Glossary</i>\n\n"
+        "🔤 <b>Funding rate</b>\n"
+        "% that longs pay shorts (or vice versa) every 8 hours.\n"
+        "Higher = more profitable to be short on futures.\n\n"
+        "🔤 <b>Spot</b>\n"
+        "Market where you buy the actual token.\n"
+        "Price here is the real price of the asset.\n\n"
+        "🔤 <b>Futures / Perp (Perpetual)</b>\n"
+        "Contract to buy/sell an asset with no expiry.\n"
+        "Price is anchored to spot via funding rate.\n\n"
+        "🔤 <b>Basis</b>\n"
+        "Difference between futures and spot price.\n"
+        "Small basis = good peg = less slippage risk at close.\n\n"
+        "🔤 <b>Long / Short</b>\n"
+        "Long — betting on price rise. Short — betting on fall.\n"
+        "In our strategy long spot + short futures neutralize direction.\n\n"
+        "🔤 <b>Notional</b>\n"
+        "Position size in USDT. Funding is calculated from this.\n\n"
+        "🔤 <b>Positive ratio</b>\n"
+        "Share of time the rate was positive.\n"
+        "90% = out of 90 payments you received money 81 times.\n\n"
+        "🔤 <b>PnL (Profit and Loss)</b>\n"
+        "Final profit or loss from the strategy.\n\n"
+        "🔤 <b>Liquidation</b>\n"
+        "Forced position close by exchange due to insufficient margin.\n"
+        "Avoided in our strategy by using no leverage.\n\n"
+        "🔤 <b>Maker / Taker</b>\n"
+        "Maker — limit order (cheaper fee).\n"
+        "Taker — market order (higher fee).\n"
+        "Fees: maker ~0.02%, taker ~0.05% on Binance Futures.\n"
+    ),
+],
+
 }
 
 # start text
 
 _START_TEXT_RU = (
     "📊 <b>Funding Rate Bot</b>\n\n"
-    "Бот помогает зарабатывать на funding rate арбитраже.\n\n"
-    "• Скринер\n"
-    "• Funding таймер\n"
-    "• Симуляция\n"
-    "• Аналитика\n"
+    "Бот помогает зарабатывать на <b>funding rate арбитраже</b> — "
+    "нейтральной к рынку стратегии на крипто биржах.\n\n"
+    "• 🔍 Скринер лучших символов по доходности\n"
+    "• ⏰ Таймер до следующей выплаты funding\n"
+    "• 🧮 Симуляция стратегии на исторических данных\n"
+    "• 📈 Аналитика basis и спредов\n"
 )
 
 _START_TEXT_EN = (
     "📊 <b>Funding Rate Bot</b>\n\n"
-    "Bot for funding rate arbitrage.\n"
+    "Earn on <b>funding rate arbitrage</b> — "
+    "a market-neutral strategy on crypto exchanges.\n\n"
+    "• 🔍 Screener for top symbols by yield\n"
+    "• ⏰ Countdown to next funding payment\n"
+    "• 🧮 Strategy simulation on historical data\n"
+    "• 📈 Basis and spread analytics\n"
 )
 
 # keyboards
@@ -290,3 +387,5 @@ def register_start_handlers(app, engine):
     app.add_handler(CallbackQueryHandler(lambda u, c: about_page_callback(u, c, engine), pattern="^about_page:"))
     app.add_handler(CallbackQueryHandler(lambda u, c: about_menu_callback(u, c, engine), pattern="^about_menu$"))
     app.add_handler(CallbackQueryHandler(lambda u, c: u.callback_query.answer(), pattern="^about_noop$"))
+
+    

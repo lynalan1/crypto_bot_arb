@@ -95,7 +95,7 @@ async def _send_analytics(reply_text, reply_photo, symbol: str, engine, lang: st
         return
 
     if funding_data:
-        await reply_text(format_funding_history(funding_data, symbol), parse_mode="HTML")
+        await reply_text(format_funding_history(funding_data, symbol, lang), parse_mode="HTML")
         buf = plot_funding_history(funding_data, symbol)
         await reply_photo(photo=buf)
 
@@ -160,6 +160,7 @@ def build_analytics_handler(engine) -> ConversationHandler:
         fallbacks=[],
         per_user=True,
         per_chat=True,
+        allow_reentry=True,
     )
 
 def register_analytics_handlers(app, engine) -> None:

@@ -1,15 +1,9 @@
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    ContextTypes,
-    CommandHandler,
-    CallbackQueryHandler,
-)
+from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 
-from app.bots.funding_bot.utils import with_menu_button
+from app.bots.funding_bot.utils import with_menu_button, get_lang
 from app.bots.funding_bot.i18n import t
-from app.bots.funding_bot.utils import get_lang
-
 from app.bots.funding_bot.queries.simulation import (
     get_user_simulations,
     get_profile_summary,
@@ -23,42 +17,26 @@ from app.bots.funding_bot.formatters.simulation_fmt import (
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Клавиатуры
-# ---------------------------------------------------------------------------
-
 def _simulations_keyboard(simulations, lang: str = "ru") -> InlineKeyboardMarkup:
-    buttons = []
-    for sim in simulations:
-        label = (
-            f"{sim['symbol']} "
-            f"{sim['notional_usdt']:,.0f}$ "
-            f"{sim['total_pnl']:+.2f} "
-            f"{sim['days']}d"
-        )
-        buttons.append([
-            InlineKeyboardButton(
-                label,
-                callback_data=f"profile_detail:{sim['id']}",
-            )
-        ])
-
+    buttons = [
+        [InlineKeyboardButton(
+            f"{sim['symbol']} {sim['notional_usdt']:,.0f}$ {sim['total_pnl']:+.2f} {sim['days']}d",
+            callback_data=f"profile_detail:{sim['id']}"
+        )] for sim in simulations
+    ]
     buttons.append([
         InlineKeyboardButton(t(lang, "btn_refresh"), callback_data="profile_refresh"),
         InlineKeyboardButton(t(lang, "btn_menu"),    callback_data="go_menu"),
     ])
-
     return InlineKeyboardMarkup(buttons)
-
 
 def _detail_keyboard(sim_id: int, lang: str = "ru") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton(t(lang, "btn_delete"),      callback_data=f"profile_delete:{sim_id}"),
+            InlineKeyboardButton(t(lang, "btn_delete"), callback_data=f"profile_delete:{sim_id}"),
             InlineKeyboardButton(t(lang, "btn_profile_back"), callback_data="profile_back"),
         ],
     ])
-
 
 def _confirm_delete_keyboard(sim_id: int, lang: str = "ru") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[
@@ -66,16 +44,7 @@ def _confirm_delete_keyboard(sim_id: int, lang: str = "ru") -> InlineKeyboardMar
         InlineKeyboardButton(t(lang, "btn_cancel"),     callback_data="profile_back"),
     ]])
 
-# ---------------------------------------------------------------------------
-# /profile — главная страница
-# ---------------------------------------------------------------------------
-
-async def profile_command(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    engine,
-) -> None:
-
+async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE, engine) -> None:
     if update.message:
         reply_text  = update.message.reply_text
         telegram_id = update.message.from_user.id
@@ -96,37 +65,17 @@ async def profile_command(
         return
 
     if not simulations:
-        await reply_text(
-            t(lang, "profile_empty"),
-            parse_mode="HTML",
-        )
+        await reply_text(t(lang, "profile_empty"), parse_mode="HTML")
         return
 
-    await reply_text(
-        format_profile_summary(summary),
-        parse_mode="HTML",
-    )
-    await reply_text(
-        format_simulation_list(simulations),
-        parse_mode="HTML",
-        reply_markup=_simulations_keyboard(simulations, lang),
-    )
+    await reply_text(format_profile_summary(summary), parse_mode="HTML")
+    await reply_text(format_simulation_list(simulations), parse_mode="HTML", reply_markup=_simulations_keyboard(simulations, lang))
 
-# ---------------------------------------------------------------------------
-# Детализация одной симуляции
-# ---------------------------------------------------------------------------
-
-async def profile_detail(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    engine,
-) -> None:
-
+async def profile_detail(update: Update, context: ContextTypes.DEFAULT_TYPE, engine) -> None:
     query       = update.callback_query
     telegram_id = update.effective_user.id
     sim_id      = int(query.data.split(":")[1])
     lang        = get_lang(context, engine, telegram_id)
-
     await query.answer()
 
     try:
@@ -141,7 +90,6 @@ async def profile_detail(
         return
 
     context.user_data["viewed_sim_id"] = sim_id
-
     summary_dict = {
         "symbol":          sim["symbol"],
         "side":            sim["side"],
@@ -163,22 +111,11 @@ async def profile_detail(
         reply_markup=_detail_keyboard(sim_id, lang),
     )
 
-# ---------------------------------------------------------------------------
-# Назад к профилю
-# ---------------------------------------------------------------------------
-
-async def profile_back(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    engine,
-) -> None:
-
+async def profile_back(update: Update, context: ContextTypes.DEFAULT_TYPE, engine) -> None:
     query       = update.callback_query
     telegram_id = update.effective_user.id
     lang        = get_lang(context, engine, telegram_id)
-
     await query.answer()
-
     try:
         summary     = get_profile_summary(engine, telegram_id)
         simulations = get_user_simulations(engine, telegram_id)
@@ -186,30 +123,14 @@ async def profile_back(
         logger.error(f"[profile] back failed for user={telegram_id}: {e}")
         await query.answer("❌ Ошибка загрузки", show_alert=True)
         return
-
     await query.message.reply_text(format_profile_summary(summary), parse_mode="HTML")
-    await query.message.reply_text(
-        format_simulation_list(simulations),
-        parse_mode="HTML",
-        reply_markup=_simulations_keyboard(simulations, lang),
-    )
+    await query.message.reply_text(format_simulation_list(simulations), parse_mode="HTML", reply_markup=_simulations_keyboard(simulations, lang))
 
-# ---------------------------------------------------------------------------
-# Обновить
-# ---------------------------------------------------------------------------
-
-async def profile_refresh(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    engine,
-) -> None:
-
+async def profile_refresh(update: Update, context: ContextTypes.DEFAULT_TYPE, engine) -> None:
     query       = update.callback_query
     telegram_id = update.effective_user.id
     lang        = get_lang(context, engine, telegram_id)
-
     await query.answer("🔄 Обновляю..." if lang == "ru" else "🔄 Refreshing...")
-
     try:
         summary     = get_profile_summary(engine, telegram_id)
         simulations = get_user_simulations(engine, telegram_id)
@@ -217,56 +138,25 @@ async def profile_refresh(
         logger.error(f"[profile] refresh failed for user={telegram_id}: {e}")
         await query.answer("❌ Ошибка обновления", show_alert=True)
         return
-
     try:
-        await query.edit_message_text(
-            format_simulation_list(simulations),
-            parse_mode="HTML",
-            reply_markup=_simulations_keyboard(simulations, lang),
-        )
+        await query.edit_message_text(format_simulation_list(simulations), parse_mode="HTML", reply_markup=_simulations_keyboard(simulations, lang))
     except Exception:
         pass
 
-# ---------------------------------------------------------------------------
-# Удаление — запрос подтверждения
-# ---------------------------------------------------------------------------
-
-async def profile_delete(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    engine,
-) -> None:
-
+async def profile_delete(update: Update, context: ContextTypes.DEFAULT_TYPE, engine) -> None:
     query       = update.callback_query
     sim_id      = int(query.data.split(":")[1])
     telegram_id = update.effective_user.id
     lang        = get_lang(context, engine, telegram_id)
-
     await query.answer()
+    await query.message.reply_text(t(lang, "delete_confirm"), parse_mode="HTML", reply_markup=_confirm_delete_keyboard(sim_id, lang))
 
-    await query.message.reply_text(
-        t(lang, "delete_confirm"),
-        parse_mode="HTML",
-        reply_markup=_confirm_delete_keyboard(sim_id, lang),
-    )
-
-# ---------------------------------------------------------------------------
-# Удаление — подтверждено
-# ---------------------------------------------------------------------------
-
-async def profile_delete_confirm(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    engine,
-) -> None:
-
+async def profile_delete_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE, engine) -> None:
     from app.bots.funding_bot.queries.simulation import delete_simulation
-
     query       = update.callback_query
     telegram_id = update.effective_user.id
     sim_id      = int(query.data.split(":")[1])
     lang        = get_lang(context, engine, telegram_id)
-
     await query.answer()
 
     try:
@@ -280,10 +170,7 @@ async def profile_delete_confirm(
         await query.answer("❌ Симуляция не найдена", show_alert=True)
         return
 
-    await query.message.reply_text(
-        t(lang, "profile_deleted"),
-        parse_mode="HTML",
-    )
+    await query.message.reply_text(t(lang, "profile_deleted"), parse_mode="HTML")
 
     try:
         summary     = get_profile_summary(engine, telegram_id)
@@ -293,48 +180,17 @@ async def profile_delete_confirm(
         return
 
     if not simulations:
-        await query.message.reply_text(
-            t(lang, "profile_no_more"),
-            parse_mode="HTML",
-            reply_markup=with_menu_button([], lang),
-        )
+        await query.message.reply_text(t(lang, "profile_no_more"), parse_mode="HTML", reply_markup=with_menu_button([], lang))
         return
 
     await query.message.reply_text(format_profile_summary(summary), parse_mode="HTML")
-    await query.message.reply_text(
-        format_simulation_list(simulations),
-        parse_mode="HTML",
-        reply_markup=_simulations_keyboard(simulations, lang),
-    )
-
+    await query.message.reply_text(format_simulation_list(simulations), parse_mode="HTML", reply_markup=_simulations_keyboard(simulations, lang))
     logger.info(f"[profile] deleted sim_id={sim_id} for user={telegram_id}")
 
-# ---------------------------------------------------------------------------
-# Регистрация — ОДНА функция, полная
-# ---------------------------------------------------------------------------
-
 def register_profile_handlers(app, engine) -> None:
-    app.add_handler(CommandHandler(
-        "profile",
-        lambda u, c: profile_command(u, c, engine),
-    ))
-    app.add_handler(CallbackQueryHandler(
-        lambda u, c: profile_detail(u, c, engine),
-        pattern="^profile_detail:",
-    ))
-    app.add_handler(CallbackQueryHandler(
-        lambda u, c: profile_back(u, c, engine),
-        pattern="^profile_back$",
-    ))
-    app.add_handler(CallbackQueryHandler(
-        lambda u, c: profile_refresh(u, c, engine),
-        pattern="^profile_refresh$",
-    ))
-    app.add_handler(CallbackQueryHandler(
-        lambda u, c: profile_delete(u, c, engine),
-        pattern="^profile_delete:",
-    ))
-    app.add_handler(CallbackQueryHandler(
-        lambda u, c: profile_delete_confirm(u, c, engine),
-        pattern="^profile_delete_confirm:",
-    ))
+    app.add_handler(CommandHandler("profile", lambda u, c: profile_command(u, c, engine)))
+    app.add_handler(CallbackQueryHandler(lambda u, c: profile_detail(u, c, engine), pattern="^profile_detail:"))
+    app.add_handler(CallbackQueryHandler(lambda u, c: profile_back(u, c, engine), pattern="^profile_back$"))
+    app.add_handler(CallbackQueryHandler(lambda u, c: profile_refresh(u, c, engine), pattern="^profile_refresh$"))
+    app.add_handler(CallbackQueryHandler(lambda u, c: profile_delete(u, c, engine), pattern="^profile_delete:"))
+    app.add_handler(CallbackQueryHandler(lambda u, c: profile_delete_confirm(u, c, engine), pattern="^profile_delete_confirm:"))

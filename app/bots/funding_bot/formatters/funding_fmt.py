@@ -1,15 +1,12 @@
-def format_top_funding(data) -> str:
+from app.bots.funding_bot.i18n import t
 
+
+def format_top_funding(data, lang: str = "ru") -> str:
     if not data:
-        return "📭 <b>No funding data available</b>\n"
+        return t(lang, "no_data")
 
     lines = [
-        "📊 <b>Top Funding Rates</b>\n",
-        "<i>"
-        "Avg rate — доход за 1 выплату на вложенный капитал\n"
-        "Positive — стабильность rate (чем выше тем лучше)\n"
-        "Days tracked — дней наблюдения"
-        "</i>\n",
+        t(lang, "funding_header"),
     ]
 
     for i, row in enumerate(data, start=1):
@@ -21,44 +18,42 @@ def format_top_funding(data) -> str:
         sign = "🟢" if avg_funding >= 0 else "🔴"
 
         if avg_funding >= 0.0001 and avg_pos_ratio >= 0.9:
-            verdict = "⭐⭐ отличный"
+            verdict = t(lang, "verdict_excellent")
         elif avg_funding >= 0.00005 and avg_pos_ratio >= 0.7:
-            verdict = "⭐ привлекательный"
+            verdict = t(lang, "verdict_good")
         elif avg_funding >= 0.00001 and avg_pos_ratio >= 0.5:
-            verdict = "👀 умеренный"
+            verdict = t(lang, "verdict_moderate")
         elif avg_funding < 0:
-            verdict = "⚠️ отрицательный"
+            verdict = t(lang, "verdict_negative")
         else:
-            verdict = "😐 слабый"
+            verdict = t(lang, "verdict_weak")
+
+        day_label = "d" if lang == "en" else "д"
 
         lines.append(
             f"{i}. {sign} <b>{symbol}</b>  <i>{verdict}</i>\n"
             f"   Avg rate:  <code>{avg_funding:+.4%}</code>\n"
             f"   Positive:  <code>{avg_pos_ratio:.1%}</code>\n"
-            f"   Tracked:   <code>{days_count}d</code>\n"
+            f"   Tracked:   <code>{days_count}{day_label}</code>\n"
         )
 
-    lines.append(
-        "\n<i>💡 Для арбитража: Avg rate &gt; 0.005% и Positive &gt; 70%</i>"
-    )
-
+    lines.append(f"\n<i>{t(lang, 'funding_hint')}</i>")
     return "\n".join(lines)
 
 
-def format_funding_history(data, symbol) -> str:
 
+def format_funding_history(data, symbol: str, lang: str = "ru") -> str:
     if not data:
-        return f"📭 <b>No funding history for {symbol}</b>\n"
+        return t(lang, "no_data")
 
     lines = [f"📈 <b>Funding History — {symbol}</b>\n"]
 
     for row in data:
-        date          = row["date"]
-        mean          = float(row["funding_mean"])
-        std           = float(row["funding_std"])
-        pos_ratio     = float(row["positive_ratio"])
-
-        sign = "🟢" if mean >= 0 else "🔴"
+        date      = row["date"]
+        mean      = float(row["funding_mean"])
+        std       = float(row["funding_std"])
+        pos_ratio = float(row["positive_ratio"])
+        sign      = "🟢" if mean >= 0 else "🔴"
 
         lines.append(
             f"{sign} <code>{date}</code>\n"
